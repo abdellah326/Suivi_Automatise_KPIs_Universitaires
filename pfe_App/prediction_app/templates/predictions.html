@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EduPredict AI - Espace Prédictions</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        body { background-color: #f3f4f6; font-family: 'Inter', sans-serif; }
+    </style>
+</head>
+<body class="flex h-screen overflow-hidden">
+
+    <aside class="w-64 bg-white shadow-xl hidden md:flex flex-col">
+        <div class="p-6 flex items-center justify-center border-b">
+            <h1 class="text-2xl font-bold text-blue-600 tracking-wider">
+                <i class="fa-solid fa-graduation-cap mr-2"></i>EduPredict
+            </h1>
+        </div>
+        <nav class="flex-1 p-4 space-y-2">
+            <a href="/" class="flex items-center gap-3 p-3 text-gray-600 hover:bg-gray-50 rounded-xl font-medium transition-colors">
+                <i class="fa-solid fa-chart-pie w-5"></i> Vue d'ensemble
+            </a>
+            <a href="/predictions/" class="flex items-center gap-3 p-3 text-blue-600 bg-blue-50 rounded-xl font-medium transition-colors">
+                <i class="fa-solid fa-users-viewfinder w-5"></i> Espace Prédictions
+            </a>
+        </nav>
+    </aside>
+
+    <main class="flex-1 overflow-y-auto p-8">
+        
+        <header class="flex justify-between items-center mb-8">
+            <div>
+                <h2 class="text-3xl font-bold text-gray-800">Espace Prédictions (IA)</h2>
+                <p class="text-gray-500 mt-1">Résultats du modèle Machine Learning (Clustering & Classification)</p>
+            </div>
+            <form action="" method="POST" enctype="multipart/form-data" class="m-0">
+                {% csrf_token %}
+                <input type="file" id="fileInput" name="fichier_etudiants" accept=".csv" class="hidden" onchange="this.form.submit()">
+                <label for="fileInput" class="cursor-pointer flex items-center gap-2 bg-purple-600 hover:bg-purple-700 text-white px-5 py-2.5 rounded-xl shadow-lg transition-all font-medium">
+                    <i class="fa-solid fa-brain"></i> Lancer l'Analyse IA
+                </label>
+            </form>
+        </header>
+
+        <!-- 2 Charts Section (Clustering & Risque) -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+            <!-- Mibyan 1: PCA Clustering -->
+            <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+                <h3 class="text-lg font-bold text-gray-800 mb-4">Groupes de Soutien (K-Means / PCA)</h3>
+                <div class="relative h-64 w-full"><canvas id="pcaChart"></canvas></div>
+            </div>
+            
+            <!-- Mibyan 2: Statut de Risque -->
+            <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+                <h3 class="text-lg font-bold text-gray-800 mb-4">Prédiction du Décrochage (ann)</h3>
+                <div class="relative h-64 w-full flex justify-center"><canvas id="riskChart"></canvas></div>
+            </div>
+        </div>
+
+        <!-- Table des Étudiants -->
+        <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mb-8">
+            <div class="p-6 border-b border-gray-100 bg-gray-50">
+                <h3 class="text-lg font-bold text-gray-800">Résultats Détaillés par Étudiant</h3>
+            </div>
+            <div class="overflow-x-auto max-h-96">
+                <table class="w-full text-left border-collapse">
+                    <thead class="sticky top-0 bg-white shadow-sm">
+                        <tr class="text-gray-500 text-sm">
+                            <th class="p-4 font-medium">ID Étudiant</th>
+                            <th class="p-4 font-medium">GPA Range</th>
+                            <th class="p-4 font-medium">Internet</th>
+                            <th class="p-4 font-medium">Groupe Recommandé</th>
+                            <th class="p-4 font-medium">Statut Prédictif</th>
+                        </tr>
+                    </thead>
+                    <tbody class="text-sm divide-y divide-gray-100">
+                        {% for etudiant in etudiants %}
+                        <tr class="hover:bg-gray-50 transition-colors">
+                            <td class="p-4 font-bold text-gray-700">{{ etudiant.ID_Etudiant }}</td>
+                            <td class="p-4 text-gray-600">{{ etudiant.gpa_range }}</td>
+                            <td class="p-4 text-gray-600">{{ etudiant.has_internet_access }}</td>
+                            
+                            <!-- Groupe Soutien (Couleurs) -->
+                            <td class="p-4">
+                                {% if etudiant.Groupe_Soutien == cluster_faible %}
+                                    <span class="bg-red-100 text-red-700 px-3 py-1 rounded-full text-xs font-bold">
+                                        <i class="fa-solid fa-life-ring mr-1"></i> Soutien Intensif
+                                    </span>
+                                {% elif etudiant.Groupe_Soutien == cluster_moyen %}
+                                    <span class="bg-orange-100 text-orange-700 px-3 py-1 rounded-full text-xs font-bold">
+                                        <i class="fa-solid fa-scale-balanced mr-1"></i> Niveau Moyen
+                                    </span>
+                                {% else %}
+                                    <span class="bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs font-bold">
+                                        <i class="fa-solid fa-star mr-1"></i> Excellent
+                                    </span>
+                                {% endif %}
+                            </td>
+
+                            <!-- Risque (Rouge / Vert) -->
+                            <td class="p-4">
+                                {% if etudiant.Target_Risk == 1 %}
+                                    <span class="flex items-center gap-1 text-red-600 font-bold bg-red-50 px-2 py-1 rounded inline-flex">
+                                        <i class="fa-solid fa-circle-exclamation"></i> En Danger
+                                    </span>
+                                {% else %}
+                                    <span class="flex items-center gap-1 text-green-600 font-bold bg-green-50 px-2 py-1 rounded inline-flex">
+                                        <i class="fa-solid fa-check-circle"></i> En Sécurité
+                                    </span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="5" class="p-8 text-center text-gray-400">
+                                <i class="fa-solid fa-folder-open text-4xl mb-3"></i>
+                                <p>Veuillez importer un fichier CSV pour voir les prédictions.</p>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- ================= SCRIPTS DES CHARTS (Prédictions) ================= -->
+    <script>
+        const riskData = {{ risk_data|default:"[]"|safe }};
+        const scatterC0 = {{ scatter_c0|default:"[]"|safe }};
+        const scatterC1 = {{ scatter_c1|default:"[]"|safe }};
+        const scatterC2 = {{ scatter_c2|default:"[]"|safe }};
+
+        // 1. Chart Risque (Doughnut)
+        if (riskData.length > 0) {
+            new Chart(document.getElementById('riskChart').getContext('2d'), {
+                type: 'doughnut',
+                data: {
+                    labels: ['En Sécurité', 'En Danger'],
+                    datasets: [{
+                        data: riskData,
+                        backgroundColor: ['#10b981', '#ef4444'], 
+                        borderWidth: 0,
+                        hoverOffset: 4
+                    }]
+                },
+                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }
+            });
+        }
+
+        // 2. Chart PCA Clustering (Scatter Plot)
+        if (scatterC0.length > 0) {
+            new Chart(document.getElementById('pcaChart').getContext('2d'), {
+                type: 'scatter',
+                data: {
+                    datasets: [
+                        { label: 'Groupe 0', data: scatterC0, backgroundColor: '#3b82f6' }, // أزرق
+                        { label: 'Groupe 1', data: scatterC1, backgroundColor: '#10b981' }, // أخضر
+                        { label: 'Groupe 2', data: scatterC2, backgroundColor: '#f59e0b' }  // ليموني
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: { title: { display: true, text: 'PCA 1' } },
+                        y: { title: { display: true, text: 'PCA 2' } }
+                    }
+                }
+            });
+        }
+    </script>
+</body>
+</html>
